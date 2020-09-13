@@ -11,7 +11,7 @@ usage () {
   echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, strace, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
-  echogreen "API=      (Default: 29) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29)"
+  echogreen "API=      (Default: 29) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
   echogreen "          Note that Zsh requires API of 24 or higher for gdbm"
   echogreen "           Note that you can put as many of these as you want together as long as they're comma separated"
   echogreen "           Ex: BIN=htop,vim,zsh"
@@ -136,7 +136,7 @@ TEXTRESET=$(tput sgr0)
 TEXTGREEN=$(tput setaf 2)
 TEXTRED=$(tput setaf 1)
 DIR=$PWD
-NDKVER=r21
+NDKVER=r21d
 STATIC=true
 OIFS=$IFS; IFS=\|;
 while true; do
@@ -152,8 +152,8 @@ IFS=$OIFS
 [ -z "$BIN" -o "$BIN" == "all" ] && BIN="htop patchelf strace vim zsh"
 
 case $API in
-  21|22|23|24|26|27|28|29) ;;
-  *) API=29;;
+  21|22|23|24|26|27|28|29|30) ;;
+  *) API=30;;
 esac
 
 if [ -f /proc/cpuinfo ]; then
@@ -189,12 +189,12 @@ PVER=8.43
 ZVER=1.2.11
 for LBIN in $BIN; do
   case $LBIN in
-    "htop") VER="2.2.0"; URL="hishamhm/htop";;
+    "htop") VER="3.0.1"; URL="htop-dev/htop/";;
     "patchelf") VER="0.10"; URL="NixOS/patchelf";;
     "strace") VER="v5.5"; URL="strace/strace";;
     "vim") unset VER; URL="vim/vim";;
-    "zsh") VER="5.7.1";;
-    "zstd") VER="v1.4.4"; URL="facebook/zstd";;
+    "zsh") VER="5.8";;
+    "zstd") VER="v1.4.5"; URL="facebook/zstd";;
     *) echored "Invalid binary specified!"; usage;;
   esac
 
