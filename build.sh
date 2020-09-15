@@ -11,7 +11,7 @@ usage () {
   echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, strace, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
-  echogreen "API=      (Default: 29) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
+  echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
   echogreen "          Note that Zsh requires API of 24 or higher for gdbm"
   echogreen "           Note that you can put as many of these as you want together as long as they're comma separated"
   echogreen "           Ex: BIN=htop,vim,zsh"
@@ -184,14 +184,14 @@ for i in ar as ld ranlib strip clang gcc clang++ g++; do
   ln -sf $ANDROID_TOOLCHAIN/i686-linux-android-$i $ANDROID_TOOLCHAIN/i686-linux-gnu-$i
 done
 
-NVER=6.1
+NVER=6.2
 PVER=8.43
 ZVER=1.2.11
 for LBIN in $BIN; do
   case $LBIN in
     "htop") VER="3.0.1"; URL="htop-dev/htop/";;
     "patchelf") VER="0.10"; URL="NixOS/patchelf";;
-    "strace") VER="v5.5"; URL="strace/strace";;
+    "strace") VER="v5.8"; URL="strace/strace";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
     "zstd") VER="v1.4.5"; URL="facebook/zstd";;
@@ -257,7 +257,10 @@ for LBIN in $BIN; do
         $FLAGS--prefix=$PREFIX
         ;;
       "strace")
-        [ "$LARCH" == "x86_64" ] && FLAGS="--enable-mpers=m32 $FLAGS"
+        case $LARCH in
+          "x86_64") FLAGS="--enable-mpers=m32 $FLAGS";;
+          "aarch64") FLAGS="--enable-mpers=mx32 $FLAGS";; #mpers-m32 errors since v5.6
+        esac
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
@@ -326,7 +329,7 @@ for LBIN in $BIN; do
     [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
     if [ "$LBIN" == "zsh" ]; then
       make install -j$JOBS DESTDIR=$PREFIX
-      ! $STATIC && [ "$LARCH" == "arm64-v8a" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
+      ! $STATIC && [ "$LARCH" == "aarch64" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
     else
       make install -j$JOBS
     fi
