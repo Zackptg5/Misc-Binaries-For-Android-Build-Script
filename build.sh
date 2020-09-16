@@ -8,7 +8,7 @@ echogreen () {
 usage () {
   echo " "
   echored "USAGE:"
-  echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, strace, vim, zsh, zstd)"
+  echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, sqlite, strace, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
   echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
@@ -192,6 +192,7 @@ for LBIN in $BIN; do
   case $LBIN in
     "htop") VER="3.0.1"; URL="htop-dev/htop/";;
     "patchelf") VER="0.10"; URL="NixOS/patchelf";;
+    "sqlite") VER="3330000";;
     "strace") VER="v5.5"; URL="strace/strace";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
@@ -201,15 +202,26 @@ for LBIN in $BIN; do
 
   echogreen "Fetching $LBIN"
   cd $DIR
-  if [ "$LBIN" == "zsh" ]; then
-    [ -f "zsh-$VER.tar.xz" ] || wget -O zsh-$VER.tar.xz https://sourceforge.net/projects/zsh/files/zsh/$VER/zsh-$VER.tar.xz/download
-    [ -d "zsh" ] || tar -xf zsh-$VER.tar.xz --transform s/zsh-$VER/zsh/
-  else
-    rm -rf $LBIN
-    git clone https://github.com/$URL
-  fi
-  cd $LBIN
-  [ "$VER" ] && git checkout $VER 2>/dev/null
+  rm -rf $LBIN
+
+  case $LBIN in
+    "sqlite") 
+      [ -f "sqlite-autoconf-$VER.tar.gz" ] || wget https://sqlite.org/2020/sqlite-autoconf-$VER.tar.gz
+       tar -xf sqlite-autoconf-$VER.tar.gz --transform s/sqlite-autoconf-$VER/sqlite/
+      cd $LBIN
+      ;;
+    "zsh") 
+      [ -f "zsh-$VER.tar.xz" ] || wget -O zsh-$VER.tar.xz https://sourceforge.net/projects/zsh/files/zsh/$VER/zsh-$VER.tar.xz/download
+      tar -xf zsh-$VER.tar.xz --transform s/zsh-$VER/zsh/
+      cd $LBIN
+      ;;
+    *)
+      git clone https://github.com/$URL
+      cd $LBIN
+      [ "$VER" ] && git checkout $VER 2>/dev/null
+      ;;
+  esac
+
   case $LBIN in
     "htop") ./autogen.sh;;
     "patchelf") ./bootstrap.sh;;
@@ -255,6 +267,11 @@ for LBIN in $BIN; do
         ;;
       "patchelf")
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
+        $FLAGS--prefix=$PREFIX
+        ;;
+      "sqlite")
+        build_zlib
+        ./configure CFLAGS="$CFLAGS -I$ZPREFIX/include" LDFLAGS="$LDFLAGS -L$ZPREFIX/lib" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
       "strace")

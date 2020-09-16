@@ -1,7 +1,7 @@
 # Misc Binaries for Android Build Script
 
 This will be any of the following binaries using Android NDK:<br/>
-htop, patchelf, strace, vim, zsh, zstd<br/>
+htop, patchelf, sqlite3, strace, vim, zsh, zstd<br/>
 
 ## Prerequisites
 
@@ -25,6 +25,7 @@ chmod +x ./build.sh
 * [NixOS](https://github.com/NixOS/patchelf)
 * [OhMyZsh](https://ohmyz.sh)
 * [Partcyborg](https://github.com/partcyborg/zsh_arm64_magisk)
+* [Sqlite3](https://sqlite.org/index.html)
 * [Strace](https://github.com/strace/strace)
 * [Vim](https://github.com/vim/vim)
 * [Zsh](https://www.zsh.org)
