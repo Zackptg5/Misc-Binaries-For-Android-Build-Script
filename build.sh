@@ -192,7 +192,7 @@ for LBIN in $BIN; do
   case $LBIN in
     "htop") VER="3.0.1"; URL="htop-dev/htop/";;
     "patchelf") VER="0.10"; URL="NixOS/patchelf";;
-    "strace") VER="v5.8"; URL="strace/strace";;
+    "strace") VER="v5.5"; URL="strace/strace";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
     "zstd") VER="v1.4.5"; URL="facebook/zstd";;
