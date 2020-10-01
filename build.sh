@@ -411,8 +411,8 @@ for LBIN in $BIN; do
         --sysconfdir=/system/etc
         ;;
       "zstd")
-        [ "$(grep '#Zackptg5' programs/Makefile)" ] && echo "#Zackptg5" >> programs/Makefile
         $STATIC && [ ! "$(grep '#Zackptg5' programs/Makefile)" ] && sed -i "s/CFLAGS  +=/CFLAGS  += -static/" programs/Makefile
+        [ "$(grep '#Zackptg5' programs/Makefile)" ] || echo "#Zackptg5" >> programs/Makefile
         true # Needed for conditional below in dynamic builds
         ;;
     esac
