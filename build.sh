@@ -8,7 +8,7 @@ echogreen () {
 usage () {
   echo " "
   echored "USAGE:"
-  echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, strace, vim, zsh, zstd)"
+  echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
   echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
@@ -34,20 +34,37 @@ build_ncursesw() {
   make distclean
   cd $DIR/$LBIN
 }
+build_ncurses() {
+  export NPREFIX="$(echo $PREFIX | sed "s|$LBIN|ncurses|")"
+  [ -d $NPREFIX ] && return 0
+	echogreen "Building NCurses..."
+	cd $DIR
+	[ -f "ncurses-$NVER.tar.gz" ] || wget -O ncurses-$NVER.tar.gz http://mirrors.kernel.org/gnu/ncurses/ncurses-$NVER.tar.gz
+	[ -d ncurses-$NVER ] || { mkdir ncurses-$NVER; tar -xf ncurses-$NVER.tar.gz --transform s/ncurses-$NVER/ncurses-$NVER/; }
+	cd ncurses-$NVER
+	./configure $FLAGS--prefix=$NPREFIX --disable-nls --disable-stripping --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
+  [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
+	make -j$JOBS
+	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+	make install
+  make distclean
+  cd $DIR/$LBIN
+}
 build_zlib() {
   export ZPREFIX="$(echo $PREFIX | sed "s|$LBIN|zlib|")"
+  [ -d $ZPREFIX ] && return 0
+	cd $DIR
 	echogreen "Building ZLib..."
-  cd $DIR
 	[ -f "zlib-$ZVER.tar.gz" ] || wget http://zlib.net/zlib-$ZVER.tar.gz
 	[ -d zlib-$ZVER ] || tar -xf zlib-$ZVER.tar.gz
 	cd zlib-$ZVER
-	./configure --prefix=$ZPREFIX
-	[ $? -eq 0 ] || { echored "Zlib configure failed!"; exit 1; }
+  [ "$1" == "static" ] && ./configure --prefix=$ZPREFIX --static || ./configure --prefix=$ZPREFIX
+	[ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
 	make -j$JOBS
-	[ $? -eq 0 ] || { echored "Zlib build failed!"; exit 1; }
+	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
 	make install
-  make distclean
-	cd $DIR/$LBIN
+  make clean
+	cd $DIR/$LBIN-$VER
 }
 build_bzip2() {
   export BPREFIX="$(echo $PREFIX | sed "s|$LBIN|bzip2|")"
@@ -131,6 +148,46 @@ setup_ohmyzsh() {
   cp -rf $OPREFIX/.oh-my-zsh $PREFIX/system/etc/zsh/
   cp -f $OPREFIX/.zshrc $PREFIX/system/etc/zsh/.zshrc
 }
+build_libpcap() {
+  export LPREFIX="$(echo $PREFIX | sed "s|$LBIN|libpcap|")"
+  rm -rf $LPREFIX
+	echogreen "Building libpcap..."
+	cd $DIR
+  rm -rf libpcap-$LVER
+	[ -f "libpcap-$LVER.tar.gz" ] || wget -O libpcap-$LVER.tar.gz https://www.tcpdump.org/release/libpcap-$LVER.tar.gz
+	tar -xf libpcap-$LVER.tar.gz
+	cd libpcap-$LVER
+  $STATIC && local FLAGS="--disable-shared $FLAGS"
+	./configure $FLAGS--prefix=$LPREFIX --with-pcap=linux --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
+	[ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
+	make -j$JOBS
+	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+  make install -j$JOBS
+  cp -rf $DIR/libpcap-$LVER/* $LPREFIX/
+  make distclean
+  cd $DIR/$LBIN
+}
+build_readline() {
+  export RPREFIX="$(echo $PREFIX | sed "s|$LBIN|readline|")"
+  [ -d $RPREFIX ] && return 0
+	echogreen "Building libreadline..."
+  cd $DIR
+	[ -f "readline-$RVER.tar.gz" ] || wget http://mirrors.kernel.org/gnu/readline/readline-$RVER.tar.gz
+	[ -d "readline-$RVER" ] || tar -xf readline-$RVER.tar.gz
+	cd readline-$RVER
+	$STATIC && local FLAGS="--disable-shared $FLAGS"
+	./configure $FLAGS--prefix=$RPREFIX \
+              --host=$target_host \
+              --target=$target_host \
+              CFLAGS="$CFLAG" \
+              LDFLAGS="$LDFLAGS"
+	[ $? -eq 0 ] || { echored "Gdbm configure failed!"; exit 1; }
+	make -j$JOBS
+	[ $? -eq 0 ] || { echored "Gdbm build failed!"; exit 1; }
+	make install -j$JOBS
+  make distclean
+	cd $DIR/$LBIN
+}
 
 TEXTRESET=$(tput sgr0)
 TEXTGREEN=$(tput setaf 2)
@@ -185,14 +242,19 @@ for i in ar as ld ranlib strip clang gcc clang++ g++; do
   ln -sf $ANDROID_TOOLCHAIN/i686-linux-android-$i $ANDROID_TOOLCHAIN/i686-linux-gnu-$i
 done
 
+LVER=1.9.1
 NVER=6.2
+OVER=1_1_1g
 PVER=8.43
+RVER=8.0
 ZVER=1.2.11
 for LBIN in $BIN; do
   case $LBIN in
-    "htop") VER="3.0.1"; URL="htop-dev/htop/";;
+    "htop") VER="3.0.1"; URL="htop-dev/htop";;
     "patchelf") VER="0.10"; URL="NixOS/patchelf";;
+    "sqlite") VER="3330000";;
     "strace") VER="v5.5"; URL="strace/strace";;
+    "tcpdump") VER="tcpdump-4.9.3"; URL="the-tcpdump-group/tcpdump";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
     "zstd") VER="v1.4.5"; URL="facebook/zstd";;
@@ -201,15 +263,26 @@ for LBIN in $BIN; do
 
   echogreen "Fetching $LBIN"
   cd $DIR
-  if [ "$LBIN" == "zsh" ]; then
+  rm -rf $LBIN
+
+  case $LBIN in
+  "sqlite") 
+    [ -f "sqlite-autoconf-$VER.tar.gz" ] || wget https://sqlite.org/2020/sqlite-autoconf-$VER.tar.gz
+      tar -xf sqlite-autoconf-$VER.tar.gz --transform s/sqlite-autoconf-$VER/sqlite/
+    cd $LBIN
+    ;;
+  "zsh") 
     [ -f "zsh-$VER.tar.xz" ] || wget -O zsh-$VER.tar.xz https://sourceforge.net/projects/zsh/files/zsh/$VER/zsh-$VER.tar.xz/download
-    [ -d "zsh" ] || tar -xf zsh-$VER.tar.xz --transform s/zsh-$VER/zsh/
-  else
-    rm -rf $LBIN
+    tar -xf zsh-$VER.tar.xz --transform s/zsh-$VER/zsh/
+    cd $LBIN
+    ;;
+  *)
     git clone https://github.com/$URL
-  fi
-  cd $LBIN
-  [ "$VER" ] && git checkout $VER 2>/dev/null
+    cd $LBIN
+    [ "$VER" ] && git checkout $VER 2>/dev/null
+    ;;
+  esac
+
   case $LBIN in
     "htop") ./autogen.sh;;
     "patchelf") ./bootstrap.sh;;
@@ -220,10 +293,10 @@ for LBIN in $BIN; do
     echogreen "Compiling $LBIN version $VER for $LARCH"
     unset FLAGS
     case $LARCH in
-      arm64) LARCH=aarch64; target_host=aarch64-linux-android;;
-      arm) LARCH=arm; target_host=arm-linux-androideabi;;
-      x64) LARCH=x86_64; target_host=x86_64-linux-android;;
-      x86) LARCH=i686; target_host=i686-linux-android; FLAGS="TIME_T_32_BIT_OK=yes ";;
+      arm64) LARCH=aarch64; target_host=aarch64-linux-android; OSARCH=android-arm64;;
+      arm) LARCH=arm; target_host=arm-linux-androideabi; OSARCH=android-arm;;
+      x64) LARCH=x86_64; target_host=x86_64-linux-android; OSARCH=android-x86_64;;
+      x86) LARCH=i686; target_host=i686-linux-android; OSARCH=android-x86; FLAGS="TIME_T_32_BIT_OK=yes ";;
       *) echored "Invalid ARCH: $LARCH!"; exit 1;;
     esac
     export AR=$target_host-ar
@@ -257,12 +330,30 @@ for LBIN in $BIN; do
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
+      "sqlite")
+        build_zlib
+        build_ncurses
+        build_readline
+	      $STATIC && FLAGS="--disable-shared $FLAGS"
+        set -x
+        ./configure --enable-readline \
+        CFLAGS="$CFLAGS -I$ZPREFIX/include -I$NPREFIX/include -I$RPREFIX/include" \
+        LDFLAGS="$LDFLAGS -L$ZPREFIX/lib -L$NPREFIX/lib -L$RPREFIX/lib" \
+        --host=$target_host --target=$target_host \
+        $FLAGS--prefix=$PREFIX
+        ;;
       "strace")
         case $LARCH in
           "x86_64") FLAGS="--enable-mpers=m32 $FLAGS";;
           # "aarch64") FLAGS="--enable-mpers=mx32 $FLAGS";; #mpers-m32 errors since v5.6, uncomment this if using compiling strace 5.6+
         esac
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
+        $FLAGS--prefix=$PREFIX
+        ;;
+      "tcpdump")
+        build_libpcap
+        ./configure CFLAGS="$CFLAGS -I$DIR/libpcap-$LVER" LDFLAGS="$LDFLAGS -L$DIR/libpcap-$LVER" \
+        --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
       "vim")
@@ -330,12 +421,12 @@ for LBIN in $BIN; do
     [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
     if [ "$LBIN" == "zsh" ]; then
       make install -j$JOBS DESTDIR=$PREFIX
-      ! $STATIC && [ "$LARCH" == "aarch64" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
+      ! $STATIC && [ "$LBIN" == "zsh" ] && [ "$LARCH" == "aarch64" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
     else
       make install -j$JOBS
     fi
-    make distclean || make clean
-    $STRIP $PREFIX/bin/*
+    # make distclean || make clean
+    $STRIP $PREFIX/*bin/*
     echogreen "$LBIN built sucessfully and can be found at: $PREFIX"
   done
 done
