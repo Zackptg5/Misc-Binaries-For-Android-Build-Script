@@ -413,6 +413,7 @@ for LBIN in $BIN; do
       "zstd")
         [ "$(grep '#Zackptg5' programs/Makefile)" ] && echo "#Zackptg5" >> programs/Makefile
         $STATIC && [ ! "$(grep '#Zackptg5' programs/Makefile)" ] && sed -i "s/CFLAGS  +=/CFLAGS  += -static/" programs/Makefile
+        true # Needed for conditional below in dynamic builds
         ;;
     esac
     [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
