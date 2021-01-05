@@ -250,14 +250,14 @@ RVER=8.0
 ZVER=1.2.11
 for LBIN in $BIN; do
   case $LBIN in
-    "htop") VER="3.0.1"; URL="htop-dev/htop";;
-    "patchelf") VER="0.10"; URL="NixOS/patchelf";;
-    "sqlite") VER="3330000";;
+    "htop") VER="3.0.4"; URL="htop-dev/htop";;
+    "patchelf") VER="0.12"; URL="NixOS/patchelf";;
+    "sqlite") VER="3340000";;
     "strace") VER="v5.5"; URL="strace/strace";;
     "tcpdump") VER="tcpdump-4.9.3"; URL="the-tcpdump-group/tcpdump";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
-    "zstd") VER="v1.4.5"; URL="facebook/zstd";;
+    "zstd") VER="v1.4.8"; URL="facebook/zstd";;
     *) echored "Invalid binary specified!"; usage;;
   esac
 
@@ -411,7 +411,7 @@ for LBIN in $BIN; do
         --sysconfdir=/system/etc
         ;;
       "zstd")
-        $STATIC && [ ! "$(grep '#Zackptg5' programs/Makefile)" ] && sed -i "s/CFLAGS  +=/CFLAGS  += -static/" programs/Makefile
+        $STATIC && [ ! "$(grep '#Zackptg5' programs/Makefile)" ] && sed -i "s/CFLAGS   +=/CFLAGS   += -static/" programs/Makefile
         [ "$(grep '#Zackptg5' programs/Makefile)" ] || echo "#Zackptg5" >> programs/Makefile
         true # Needed for conditional below in dynamic builds
         ;;
