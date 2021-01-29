@@ -289,7 +289,7 @@ for LBIN in $BIN; do
     "patchelf") VER="0.12"; URL="NixOS/patchelf";;
     "sqlite") VER="3340000";;
     "strace") VER="v5.10"; URL="strace/strace";; # Recommend v5.5 for arm64
-    "tcpdump") VER="tcpdump-4.99.0"; URL="the-tcpdump-group/tcpdump"; API=29;; # libpcap needs built against api 29 per google
+    "tcpdump") VER="tcpdump-4.99.0"; URL="the-tcpdump-group/tcpdump";;
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
     "zstd") VER="v1.4.8"; URL="facebook/zstd";;
