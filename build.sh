@@ -8,7 +8,7 @@ echogreen () {
 usage () {
   echo " "
   echored "USAGE:"
-  echogreen "BIN=      (Default: all) (Valid options are: htop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
+  echogreen "BIN=      (Default: all) (Valid options are: exa, htop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
   echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
@@ -64,7 +64,7 @@ build_zlib() {
 	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
 	make install
   make clean
-	cd $DIR/$LBIN-$VER
+	cd $DIR/$LBIN
 }
 build_bzip2() {
   export BPREFIX="$(echo $PREFIX | sed "s|$LBIN|bzip2|")"
@@ -150,18 +150,20 @@ setup_ohmyzsh() {
 }
 build_libpcap() {
   export LPREFIX="$(echo $PREFIX | sed "s|$LBIN|libpcap|")"
-  rm -rf $LPREFIX
-	echogreen "Building libpcap..."
-	cd $DIR
+  [ -d $LPREFIX ] && return 0
+  echogreen "Building libpcap..."
+  cd $DIR
   rm -rf libpcap-$LVER
-	[ -f "libpcap-$LVER.tar.gz" ] || wget -O libpcap-$LVER.tar.gz https://www.tcpdump.org/release/libpcap-$LVER.tar.gz
-	tar -xf libpcap-$LVER.tar.gz
-	cd libpcap-$LVER
-  $STATIC && local FLAGS="--disable-shared $FLAGS"
-	./configure $FLAGS--prefix=$LPREFIX --with-pcap=linux --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
-	[ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
-	make -j$JOBS
-	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+  # [ -f "libpcap-$LVER.tar.gz" ] || wget -O libpcap-$LVER.tar.gz https://www.tcpdump.org/release/libpcap-$LVER.tar.gz
+  # tar -xf libpcap-$LVER.tar.gz
+  git clone https://android.googlesource.com/platform/external/libpcap # Switch to google repo cause it just works
+  mv -f libpcap libpcap-$LVER
+  cd libpcap-$LVER
+  $STATIC && local FLAGS="--disable-shared $FLAGS" || local FLAGS="--without-libnl $FLAGS"
+  ./configure $FLAGS--prefix=$LPREFIX --with-pcap=linux --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
+  [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
+  make -j$JOBS
+  [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
   make install -j$JOBS
   cp -rf $DIR/libpcap-$LVER/* $LPREFIX/
   make distclean
@@ -181,19 +183,47 @@ build_readline() {
               --target=$target_host \
               CFLAGS="$CFLAG" \
               LDFLAGS="$LDFLAGS"
-	[ $? -eq 0 ] || { echored "Gdbm configure failed!"; exit 1; }
+	[ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
 	make -j$JOBS
-	[ $? -eq 0 ] || { echored "Gdbm build failed!"; exit 1; }
+	[ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
 	make install -j$JOBS
   make distclean
 	cd $DIR/$LBIN
+}
+build_openssl() {
+  # build_zlib - causes errors later down the line during tcpdump compile
+  export OPREFIX="$(echo $PREFIX | sed "s|$LBIN|openssl|")"
+  [ -d $OPREFIX ] && return 0
+  cd $DIR
+  echogreen "Building Openssl..."
+  [ -d openssl ] && cd openssl || { git clone https://github.com/openssl/openssl; cd openssl; git checkout OpenSSL_$OVER; }
+  if $STATIC; then
+    sed -i "/#if \!defined(_WIN32)/,/#endif/d" fuzz/client.c
+    sed -i "/#if \!defined(_WIN32)/,/#endif/d" fuzz/server.c
+    # local FLAGS=" no-shared zlib $FLAGS"
+    local FLAGS=" no-shared $FLAGS"
+  else
+    # local FLAGS=" shared zlib-dynamic $FLAGS"
+    local FLAGS=" shared $FLAGS"
+  fi
+  ./Configure $OSARCH$FLAGS \
+              -D__ANDROID_API__=$API \
+              --prefix=$OPREFIX #\
+              # --with-zlib-include=$ZPREFIX/include \
+              # --with-zlib-lib=$ZPREFIX/lib
+  [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
+  make -j$JOBS
+  [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+  make install_sw
+  make distclean
+  cd $DIR/$LBIN
 }
 
 TEXTRESET=$(tput sgr0)
 TEXTGREEN=$(tput setaf 2)
 TEXTRED=$(tput setaf 1)
 DIR=$PWD
-NDKVER=r21d
+NDKVER=r21e
 STATIC=true
 OIFS=$IFS; IFS=\|;
 while true; do
@@ -212,7 +242,6 @@ case $API in
   21|22|23|24|26|27|28|29|30) ;;
   *) API=30;;
 esac
-# MinAPI for htop is 25
 
 if [ -f /proc/cpuinfo ]; then
   JOBS=$(grep flags /proc/cpuinfo | wc -l)
@@ -241,20 +270,26 @@ for i in ar as ld ranlib strip clang gcc clang++ g++; do
   ln -sf $ANDROID_TOOLCHAIN/arm-linux-androideabi-$i $ANDROID_TOOLCHAIN/arm-linux-gnueabi-$i
   ln -sf $ANDROID_TOOLCHAIN/i686-linux-android-$i $ANDROID_TOOLCHAIN/i686-linux-gnu-$i
 done
+[ -f ~/.cargo/config.bak ] || cp -f ~/.cargo/config ~/.cargo/config.bak
+cp -f $DIR/config ~/.cargo/config
+sed -i "s|<ANDROID_TOOLCHAIN>|$ANDROID_TOOLCHAIN|g" ~/.cargo/config
 
-LVER=1.9.1
+LVER=1.10
 NVER=6.2
-OVER=1_1_1g
+OVER=1_1_1i
 PVER=8.43
 RVER=8.0
 ZVER=1.2.11
 for LBIN in $BIN; do
   case $LBIN in
-    "htop") VER="3.0.4"; URL="htop-dev/htop";;
+    "exa") VER="v0.9.0"; URL="ogham/exa"
+           [ $API -lt 24 ] && API=24;;
+    "htop") VER="3.0.4"; URL="htop-dev/htop"
+            [ $API -lt 25 ] && { $STATIC || API=25; };;
     "patchelf") VER="0.12"; URL="NixOS/patchelf";;
     "sqlite") VER="3340000";;
-    "strace") VER="v5.5"; URL="strace/strace";;
-    "tcpdump") VER="tcpdump-4.9.3"; URL="the-tcpdump-group/tcpdump";;
+    "strace") VER="v5.10"; URL="strace/strace";; # Recommend v5.5 for arm64
+    "tcpdump") VER="tcpdump-4.99.0"; URL="the-tcpdump-group/tcpdump"; API=29;; # libpcap needs built against api 29 per google
     "vim") unset VER; URL="vim/vim";;
     "zsh") VER="5.8";;
     "zstd") VER="v1.4.8"; URL="facebook/zstd";;
@@ -281,12 +316,6 @@ for LBIN in $BIN; do
     cd $LBIN
     [ "$VER" ] && git checkout $VER 2>/dev/null
     ;;
-  esac
-
-  case $LBIN in
-    "htop") ./autogen.sh;;
-    "patchelf") ./bootstrap.sh;;
-    "strace") ./bootstrap;;
   esac
 
   for LARCH in $ARCH; do
@@ -317,8 +346,16 @@ for LBIN in $BIN; do
     fi
 
     case $LBIN in 
+      "exa")
+        build_zlib
+        cargo b --release --target $target_host -j $JOBS
+        [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+        mkdir -p $PREFIX/bin
+        cp -f $DIR/exa/target/$target_host/release/exa $PREFIX/bin/exa
+      ;;
       "htop")
         build_ncursesw
+        ./autogen.sh
         ./configure CFLAGS="$CFLAGS -I$NPREFIX/include" LDFLAGS="$LDFLAGS -L$NPREFIX/lib" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX \
         --enable-proc \
@@ -327,6 +364,7 @@ for LBIN in $BIN; do
         sed -i "/rdynamic/d" Makefile.am
         ;;
       "patchelf")
+        ./bootstrap.sh
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
@@ -345,14 +383,16 @@ for LBIN in $BIN; do
       "strace")
         case $LARCH in
           "x86_64") FLAGS="--enable-mpers=m32 $FLAGS";;
-          # "aarch64") FLAGS="--enable-mpers=mx32 $FLAGS";; #mpers-m32 errors since v5.6, uncomment this if using compiling strace 5.6+
+          "aarch64") [ $(echo "$VER > 5.5" | bc -l) -eq 1 ] && FLAGS="--enable-mpers=mx32 $FLAGS";; #mpers-m32 errors since v5.6
         esac
+        ./bootstrap.sh
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
       "tcpdump")
+        build_openssl
         build_libpcap
-        ./configure CFLAGS="$CFLAGS -I$DIR/libpcap-$LVER" LDFLAGS="$LDFLAGS -L$DIR/libpcap-$LVER" \
+        ./configure CFLAGS="$CFLAGS -I$LPREFIX/include -I$OPREFIX/include" LDFLAGS="$LDFLAGS -L$LPREFIX/lib -L$OPREFIX/lib" \
         --host=$target_host --target=$target_host \
         $FLAGS--prefix=$PREFIX
         ;;
@@ -418,16 +458,19 @@ for LBIN in $BIN; do
     esac
     [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
 
-    make -j$JOBS
-    [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
-    if [ "$LBIN" == "zsh" ]; then
-      make install -j$JOBS DESTDIR=$PREFIX
-      ! $STATIC && [ "$LBIN" == "zsh" ] && [ "$LARCH" == "aarch64" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
-    else
-      make install -j$JOBS
+    if [ "$LBIN" != "exa" ]; then
+      make -j$JOBS
+      [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
+      if [ "$LBIN" == "zsh" ]; then
+        make install -j$JOBS DESTDIR=$PREFIX
+        ! $STATIC && [ "$LBIN" == "zsh" ] && [ "$LARCH" == "aarch64" -o "$LARCH" == "x86_64" ] && mv -f $DEST/$LARCH/lib $DEST/$LARCH/lib64
+      else
+        make install -j$JOBS
+      fi
+      make distclean || make clean
     fi
-    # make distclean || make clean
     $STRIP $PREFIX/*bin/*
     echogreen "$LBIN built sucessfully and can be found at: $PREFIX"
   done
 done
+[ -f ~/.cargo/config.bak ] || cp -f ~/.cargo/config.bak ~/.cargo/config
