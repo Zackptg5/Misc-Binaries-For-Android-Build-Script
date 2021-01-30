@@ -8,7 +8,7 @@ echogreen () {
 usage () {
   echo " "
   echored "USAGE:"
-  echogreen "BIN=      (Default: all) (Valid options are: exa, htop, iftop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
+  echogreen "BIN=      (Default: all) (Valid options are: exa, htop, iftop, nethogs, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
   echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
@@ -290,6 +290,7 @@ for LBIN in $BIN; do
             [ $API -lt 25 ] && { $STATIC || API=25; };;
     "iftop") VER="0.17"; VER="1.0pre4";
              [ $API -lt 23 ] && API=28;;
+    "nethogs") VER="v0.8.6"; URL="raboof/nethogs";;
     "patchelf") VER="0.12"; URL="NixOS/patchelf";;
     "sqlite") VER="3340000";;
     "strace") VER="v5.10"; URL="strace/strace";; # Recommend v5.5 for arm64
@@ -388,6 +389,15 @@ for LBIN in $BIN; do
         ./configure CFLAGS="$CFLAGS -I$LPREFIX/include -I$NPREFIX/include" LDFLAGS="$LDFLAGS -L$LPREFIX/lib -L$NPREFIX/lib" --host=$target_host --target=$target_host \
         --with-libpcap=$LPREFIX --with-resolver=netdb \
         $FLAGS--prefix=$PREFIX
+        ;;
+      "nethogs")
+        build_libpcap
+        build_ncurses
+        # Same as with iftop...
+        echo '#include <ncurses/curses.h>' > $NPREFIX/include/ncurses.h
+        # Configure Makefile with proper flags/variables
+        sed -i "1aexport PREFIX := $PREFIX\nexport CFLAGS := $CFLAGS -I$LPREFIX/include -I$NPREFIX/include\nexport CXXFLAGS := \${CFLAGS}\nexport LDFLAGS := $LDFLAGS -L$LPREFIX/lib -L$NPREFIX/lib" Makefile
+        sed -i "s/decpcap_test test/decpcap_test/g" Makefile
         ;;
       "patchelf")
         ./bootstrap.sh
@@ -492,7 +502,8 @@ for LBIN in $BIN; do
       else
         make install -j$JOBS
       fi
-      make distclean || make clean
+      make distclean 2>/dev/null || make clean 2>/dev/null
+      git reset --hard 2>/dev/null
     fi
     $STRIP $PREFIX/*bin/*
     echogreen "$LBIN built sucessfully and can be found at: $PREFIX"
