@@ -159,8 +159,8 @@ build_libpcap() {
   git clone https://android.googlesource.com/platform/external/libpcap # Switch to google repo cause it just works
   mv -f libpcap libpcap-$LVER
   cd libpcap-$LVER
-  $STATIC && local FLAGS="--disable-shared $FLAGS" || local FLAGS="--without-libnl $FLAGS"
-  ./configure $FLAGS--prefix=$LPREFIX --with-pcap=linux --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
+  $STATIC && local FLAGS="--disable-shared $FLAGS"
+  ./configure $FLAGS--prefix=$LPREFIX --with-pcap=linux --without-libnl --host=$target_host --target=$target_host CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS"
   [ $? -eq 0 ] || { echored "Configure failed!"; exit 1; }
   make -j$JOBS
   [ $? -eq 0 ] || { echored "Build failed!"; exit 1; }
