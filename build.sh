@@ -8,7 +8,7 @@ echogreen () {
 usage () {
   echo " "
   echored "USAGE:"
-  echogreen "BIN=      (Default: all) (Valid options are: exa, htop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
+  echogreen "BIN=      (Default: all) (Valid options are: exa, htop, iftop, patchelf, sqlite, strace, tcpdump, vim, zsh, zstd)"
   echogreen "ARCH=     (Default: all) (Valid Arch values: all, arm, arm64, aarch64, x86, i686, x64, x86_64)"
   echogreen "STATIC=   (Default: true) (Valid options are: true, false)"
   echogreen "API=      (Default: 30) (Valid options are: 21, 22, 23, 24, 26, 27, 28, 29, 30)"
@@ -270,9 +270,11 @@ for i in ar as ld ranlib strip clang gcc clang++ g++; do
   ln -sf $ANDROID_TOOLCHAIN/arm-linux-androideabi-$i $ANDROID_TOOLCHAIN/arm-linux-gnueabi-$i
   ln -sf $ANDROID_TOOLCHAIN/i686-linux-android-$i $ANDROID_TOOLCHAIN/i686-linux-gnu-$i
 done
-[ -f ~/.cargo/config.bak ] || cp -f ~/.cargo/config ~/.cargo/config.bak
-cp -f $DIR/config ~/.cargo/config
-sed -i "s|<ANDROID_TOOLCHAIN>|$ANDROID_TOOLCHAIN|g" ~/.cargo/config
+if [ -d ~/.cargo ]; then
+  [ -f ~/.cargo/config.bak ] || cp -f ~/.cargo/config ~/.cargo/config.bak
+  cp -f $DIR/config ~/.cargo/config
+  sed -i "s|<ANDROID_TOOLCHAIN>|$ANDROID_TOOLCHAIN|g" ~/.cargo/ 2>/dev/null
+fi
 
 LVER=1.10
 NVER=6.2
@@ -286,6 +288,8 @@ for LBIN in $BIN; do
            [ $API -lt 24 ] && API=24;;
     "htop") VER="3.0.4"; URL="htop-dev/htop"
             [ $API -lt 25 ] && { $STATIC || API=25; };;
+    "iftop") VER="0.17"; VER="1.0pre4";
+             [ $API -lt 23 ] && API=28;;
     "patchelf") VER="0.12"; URL="NixOS/patchelf";;
     "sqlite") VER="3340000";;
     "strace") VER="v5.10"; URL="strace/strace";; # Recommend v5.5 for arm64
@@ -301,9 +305,14 @@ for LBIN in $BIN; do
   rm -rf $LBIN
 
   case $LBIN in
+  "iftop")
+    [ -f "iftop-$VER.tar.gz" ] || wget http://www.ex-parrot.com/pdw/iftop/download/iftop-$VER.tar.gz
+    tar -xf iftop-$VER.tar.gz --transform s/iftop-$VER/iftop/
+    cd $LBIN
+    ;;
   "sqlite") 
     [ -f "sqlite-autoconf-$VER.tar.gz" ] || wget https://sqlite.org/2020/sqlite-autoconf-$VER.tar.gz
-      tar -xf sqlite-autoconf-$VER.tar.gz --transform s/sqlite-autoconf-$VER/sqlite/
+    tar -xf sqlite-autoconf-$VER.tar.gz --transform s/sqlite-autoconf-$VER/sqlite/
     cd $LBIN
     ;;
   "zsh") 
@@ -363,6 +372,23 @@ for LBIN in $BIN; do
         ac_cv_lib_ncursesw6_addnwstr=yes
         sed -i "/rdynamic/d" Makefile.am
         ;;
+      "iftop")
+        build_libpcap
+        build_ncurses
+        # Cause this binary's old make what's essentially a symlink for each
+        echo '#include <ncurses/curses.h>' > $NPREFIX/include/ncurses.h
+        cp -f $NPREFIX/include/ncurses.h $NPREFIX/include/curses.h
+        if [ ! "$(grep 'Bpthread.h' iftop.c)" ]; then
+          # Can't detect pthread from ndk so clear any values set by configure
+          sed -i '/test $thrfail = 1/ithrfail=0\nCFLAGS="$oldCFLAGS"\nLIBS="$oldLIBS"' configure
+          # pthread_cancel not in ndk, use Hax4us workaround found here: https://github.com/axel-download-accelerator/axel/issues/150
+          cp -f $DIR/Bpthread.h Bpthread.h
+          sed -i '/pthread.h/a#include <Bpthread.h>' iftop.c
+        fi
+        ./configure CFLAGS="$CFLAGS -I$LPREFIX/include -I$NPREFIX/include" LDFLAGS="$LDFLAGS -L$LPREFIX/lib -L$NPREFIX/lib" --host=$target_host --target=$target_host \
+        --with-libpcap=$LPREFIX --with-resolver=netdb \
+        $FLAGS--prefix=$PREFIX
+        ;;
       "patchelf")
         ./bootstrap.sh
         ./configure CFLAGS="$CFLAGS" LDFLAGS="$LDFLAGS" --host=$target_host --target=$target_host \
@@ -373,7 +399,6 @@ for LBIN in $BIN; do
         build_ncurses
         build_readline
 	      $STATIC && FLAGS="--disable-shared $FLAGS"
-        set -x
         ./configure --enable-readline \
         CFLAGS="$CFLAGS -I$ZPREFIX/include -I$NPREFIX/include -I$RPREFIX/include" \
         LDFLAGS="$LDFLAGS -L$ZPREFIX/lib -L$NPREFIX/lib -L$RPREFIX/lib" \
@@ -473,4 +498,4 @@ for LBIN in $BIN; do
     echogreen "$LBIN built sucessfully and can be found at: $PREFIX"
   done
 done
-[ -f ~/.cargo/config.bak ] || cp -f ~/.cargo/config.bak ~/.cargo/config
+[ -d ~/.cargo ] && [ ! -f ~/.cargo/config.bak ] && cp -f ~/.cargo/config.bak ~/.cargo/config
