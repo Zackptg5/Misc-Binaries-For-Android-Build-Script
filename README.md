@@ -1,3 +1,5 @@
+# Deprecated - [See the new build script here](https://github.com/Zackptg5/Cross-Compiled-Binaries-Android/tree/master/build_script)
+
 # Misc Binaries for Android Build Script
 
 This will be any of the following binaries using Android NDK:<br/>
